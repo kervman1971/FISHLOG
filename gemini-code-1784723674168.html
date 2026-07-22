@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+  <title>C'mon Bell!</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="C'mon Bell!" />
+  <meta name="theme-color" content="#55613C" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Quicksand:wght@400;500;600;700&family=Luckiest+Guy&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <style>
+    :root{
+      --bg-deep:#2F3B26;
+      --bg-mid:#3E4A2E;
+      --bg-top:#55613C;
+      --panel:rgba(40,30,10,.20);
+      --panel-2:rgba(40,30,10,.26);
+      --panel-border:rgba(184,134,59,.35);
+      --panel-border-2:rgba(184,134,59,.55);
+      --ink:#F5EFDD;
+      --ink-2:rgba(245,239,221,.88);
+      --muted:rgba(245,239,221,.62);
+      --line:rgba(184,134,59,.28);
+      --gold:#C99A3E;
+      --gold-2:#E0C077;
+      --gold-soft:rgba(201,154,62,.18);
+      --orange:#A85C2E;
+      --orange-2:#C98A55;
+      --orange-soft:rgba(168,92,46,.22);
+      --teal:#C99A3E;
+      --teal-2:#E0C077;
+      --teal-soft:rgba(201,154,62,.18);
+      --violet:#C99A3E;
+      --violet-2:#E0C077;
+      --danger:#C24E3A;
+      --danger-soft:rgba(194,78,58,.2);
+      --card-bg:#4A5636;
+      --card-bg-2:#3E4A2E;
+      --radius:24px;
+      --radius-sm:18px;
+      --radius-xs:13px;
+      --focus:0 0 0 3px rgba(184,134,59,.4);
+    }
+
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    button, input, select, textarea, a { touch-action:manipulation; }
+    html { -webkit-text-size-adjust:100%; }
+    body{
+      min-height:100vh;
+      font-family:"Quicksand",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(201,154,62,.10), transparent 40%),
+        radial-gradient(circle at 100% 15%, rgba(122,139,82,.20), transparent 45%),
+        linear-gradient(170deg, var(--bg-top), var(--bg-mid) 50%, var(--bg-deep));
+      background-attachment:fixed;
+    }
+
+    a{color:inherit}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    img{max-width:100%;display:block}
+
+    .app{
+      max-width:1100px;
+      margin:0 auto;
+      min-height:100vh;
+      position:relative;
+      z-index:1;
+    }
+
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:100;
+      background:rgba(28,22,10,.85);
+      backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      color:#fff;
+      border-bottom:3px solid var(--gold);
+      padding-top:env(safe-area-inset-top);
+      overflow:hidden;
+    }
+
+    .topbar-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:14px 16px;
+      position:relative;
+      z-index:1;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+    }
+
+    .brand-mark{
+      width:44px;height:44px;
+      border-radius:14px;
+      background:linear-gradient(155deg, var(--gold), #A85C2E);
+      display:grid;
+      place-items:center;
+      font-size:22px;
+      box-shadow:0 0 0 2px #000, 0 0 16px rgba(212,255,63,.45);
+      transform:rotate(-4deg);
+    }
+
+    .brand-text{min-width:0}
+    .brand-name{
+      font-family:"Rye",cursive;
+      letter-spacing:.5px;
+      font-size:34px;
+      line-height:1.05;
+      margin:0;
+      font-weight:400;
+      color:var(--gold-2);
+      text-shadow:0 2px 0 rgba(0,0,0,.35);
+    }
+    .brand-sub{
+      margin:3px 0 0;
+      font-size:11px;
+      color:rgba(255,255,255,.55);
+      letter-spacing:.3px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .top-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .btn{
+      border:1px solid var(--panel-border-2);
+      border-radius:999px;
+      padding:11px 16px;
+      font-weight:700;
+      font-size:13px;
+      line-height:1;
+      transition:transform .1s ease, box-shadow .1s ease, opacity .1s ease;
+      user-select:none;
+      white-space:nowrap;
+      font-family:"Baloo 2",sans-serif;
+    }
+    .btn:active{transform:scale(.97);opacity:.9}
+    .btn:focus{outline:none;box-shadow:var(--focus)}
+    .btn-primary{
+      background:linear-gradient(155deg, var(--orange-2), var(--orange) 60%, #6E3717);
+      color:#fff;
+      border:2px solid #000;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.12) inset,
+        0 4px 0 #2F3B26;
+    }
+    .btn-primary:active{
+      transform:translateY(3px);
+      box-shadow:0 0 0 1px rgba(255,255,255,.12) inset, 0 1px 0 #2F3B26;
+    }
+    .btn-secondary{
+      background:var(--panel-2);
+      color:#fff;
+      border-color:var(--panel-border-2);
+    }
+    .btn-tertiary{
+      background:rgba(255,255,255,.08);
+      color:#fff;
+      border-color:rgba(255,255,255,.22);
+    }
+    .btn-danger{
+      background:linear-gradient(160deg, var(--danger), #D94457);
+      color:#fff;
+      border-color:transparent;
+      box-shadow:0 3px 0 rgba(0,0,0,.25);
+    }
+    .btn-sm{
+      padding:8px 12px;
+      font-size:12px;
+      box-shadow:none;
+    }
+    .btn-icon{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+    }
+
+    .bottom-nav{
+      position:fixed;
+      left:0;right:0;
+      bottom:calc(72px + env(safe-area-inset-bottom));
+      z-index:119;
+      background:#2F3B26;
+      border-top:3px solid #C99A3E;
+      display:flex;
+      flex-direction:column;
+      max-width:600px;
+      margin:0 auto;
+    }
+    .bottom-nav::-webkit-scrollbar{ display:none; }
+
+    .bnav-row{
+      display:flex;
+      justify-content:space-around;
+      align-items:stretch;
+      width:100%;
+    }
+
+    .bnav-row-secondary{
+      background:rgba(24,20,8,.55);
+      border-bottom:1px solid rgba(201,154,62,.14);
+    }
+
+    .bnav-row-primary{
+      background:#2F3B26;
+    }
+
+    .bnav-item{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:3px;
+      padding:8px 2px 6px;
+      background:none;
+      border:none;
+      border-top:3px solid transparent;
+      color:rgba(255,255,255,.45);
+      cursor:pointer;
+      touch-action:manipulation;
+      min-width:0;
+    }
+
+    .bnav-row-secondary .bnav-item{
+      padding:5px 2px 4px;
+      border-top-width:2px;
+    }
+
+    .bnav-item.active{
+      color:#C99A3E;
+      border-top-color:#C99A3E;
+      background:rgba(201,154,62,.08);
+    }
+
+    .bnav-icon{
+      font-size:22px;
+      line-height:1;
+    }
+
+    .bnav-row-secondary .bnav-icon{
+      font-size:17px;
+    }
+
+    .bnav-label{
+      font-size:9px;
+      font-weight:800;
+      letter-spacing:.3px;
+      text-transform:uppercase;
+      line-height:1;
+      color:inherit;
+      white-space:nowrap;
+    }
+
+    .bnav-row-secondary .bnav-label{
+      font-size:7.5px;
+    }
+
+    main{
+      padding:16px;
+    }
+
+    .section{display:none}
+    .section.active{display:block}
+
+    .hero{
+      background:var(--panel);
+      border:1px solid var(--panel-border);
+      border-radius:var(--radius);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      overflow:hidden;
+      position:relative;
+      margin-bottom:16px;
+    }
+
+    .hero::after{
+      content:"🎣";
+      position:absolute;
+      right:-14px;bottom:-26px;
+      font-size:140px;
+      opacity:.06;
+      transform:rotate(-12deg);
+      pointer-events:none;
+    }
+
+    .hero-inner{
+      padding:20px;
+      display:grid;
+      gap:14px;
+      position:relative;
+      z-index:1;
+    }
+
+    .hero-title{
+      font-family:"Baloo 2",sans-serif;
+      font-size:36px;
+      line-height:1.05;
+      margin:0;
+      font-weight:800;
+      color:#fff;
+    }
+
+    .hero-copy{
+      color:var(--ink-2);
+      margin:0;
+      font-size:14px;
+      line-height:1.6;
+    }
+
+    .hero-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .glance-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:10px;
+    }
+
+    .stat{
+      background:var(--panel-2);
+      border:1px solid var(--panel-border);
+      border-radius:var(--radius-sm);
+      padding:12px;
+    }
+
+    .stat-label{
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.8px;
+      text-transform:uppercase;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+
+    .stat-value{
+      font-family:"Baloo 2",sans-serif;
+      font-size:26px;
+      line-height:1;
+      color:#fff;
+      font-weight:800;
+    }
+
+    .strip{
+      display:grid;
+      gap:12px;
+      grid-template-columns:1fr;
+      margin-bottom:16px;
+    }
+
+    .strip-card{
+      background:var(--panel);
+      border:1px solid var(--panel-border);
+      border-radius:var(--radius-sm);
+      padding:14px;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+
+    .strip-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .strip-title{
+      margin:0;
+      font-size:12px;
+      letter-spacing:.6px;
+      text-transform:uppercase;
+      font-weight:800;
+      color:var(--muted);
+    }
+
+    .small-link{
+      border:none;
+      background:transparent;
+      color:var(--teal-2);
+      font-weight:700;
+      font-size:12px;
+      padding:0;
+    }
+
+    .field, .select, .text, textarea{
+      width:100%;
+      border:1px solid var(--panel-border);
+      border-radius:var(--radius-xs);
+      background:rgba(255,255,255,.06);
+      color:var(--ink);
+      padding:12px 14px;
+      transition:.15s ease;
+      font-family:"Quicksand",sans-serif;
+      font-weight:600;
+    }
+    .select option, .select optgroup{ color:#2F2A1E; }
+    .field::placeholder, .text::placeholder, textarea::placeholder{ color:var(--muted); }
+
+    .field:focus, .select:focus, .text:focus, textarea:focus{
+      outline:none;
+      border-color:var(--teal-2);
+      box-shadow:var(--focus);
+      background:rgba(255,255,255,.10);
+    }
+
+    .page-head{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      margin:12px 2px 14px;
+    }
+
+    .page-head h2{
+      margin:0;
+      font-family:"Baloo 2",sans-serif;
+      font-size:24px;
+      font-weight:800;
+      color:#fff;
+    }
+    .page-head p{
+      margin:4px 0 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .catch-card, .spot-card, .panel, .leaderboard{
+      background:rgba(247,241,220,.97);
+      border:1px solid rgba(255,255,255,.5);
+      border-radius:var(--radius-sm);
+      color:#2F2A1E;
+      box-shadow:0 8px 24px rgba(0,0,0,.3);
+    }
+
+    .catch-card{
+      padding:14px;
+      display:grid;
+      grid-template-columns:60px minmax(0,1fr);
+      gap:12px;
+      margin-bottom:10px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .catch-thumb{
+      width:60px;height:60px;
+      border-radius:var(--radius-xs);
+      background:linear-gradient(155deg, var(--orange-2), #6E3717);
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+      font-size:26px;
+      flex-shrink:0;
+    }
+
+    .catch-thumb img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+    }
+
+    .catch-main h3{
+      margin:0;
+      font-size:16px;
+      line-height:1.2;
+      font-weight:800;
+      font-family:"Baloo 2",sans-serif;
+      color:#2F2A1E;
+    }
+
+    .catch-sub{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:6px;
+      color:#7A6A42;
+      font-size:12px;
+      font-weight:600;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      font-size:11px;
+      font-weight:800;
+      border-radius:999px;
+      padding:5px 10px;
+      line-height:1;
+    }
+    .pill-green{background:#E8FFC2;color:#5C8A1A}
+    .pill-blue{background:#DCEBFD;color:#1A5DA8}
+    .pill-amber{background:#F0DFC0;color:#6E3717}
+    .pill-danger{background:#FFE0E5;color:#C4264A}
+
+    .modal-overlay{
+      display:none;
+      position:fixed;
+      inset:0;
+      z-index:200;
+      background:rgba(20,16,6,.7);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+      align-items:end;
+      justify-content:center;
+    }
+
+    .modal-overlay.open{display:flex}
+    #species-sheet{ z-index:250; }
+
+    .modal{
+      width:100%;
+      max-width:640px;
+      max-height:82vh;
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      border-radius:26px 26px 20px 20px;
+      background:var(--card-bg);
+      border:1px solid var(--panel-border-2);
+      color:#fff;
+    }
+
+    .modal-head{
+      position:sticky;
+      top:0;
+      z-index:3;
+      background:var(--card-bg);
+      padding:18px 18px 12px;
+      border-bottom:1px solid var(--line);
+    }
+
+    .modal-title{
+      margin:0;
+      font-family:"Baloo 2",sans-serif;
+      font-size:24px;
+      font-weight:800;
+      color:#fff;
+    }
+
+    .modal-body{
+      padding:16px 18px;
+    }
+
+    .species-sheet-search{
+      width:100%;
+      padding:12px 14px;
+      border-radius:var(--radius-xs);
+      border:1px solid #C9B784;
+      background:#F7F1DC;
+      color:#2F2A1E;
+      font-size:14px;
+      font-weight:600;
+      margin-bottom:14px;
+    }
+
+    .species-cat-label{
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+      color:#7A6A42;
+      margin:16px 0 8px;
+    }
+
+    .species-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:8px;
+    }
+
+    .species-card{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:12px 10px;
+      background:#F7F1DC;
+      border:1px solid #C9B784;
+      border-radius:var(--radius-xs);
+      color:#2F2A1E;
+      font-weight:700;
+      font-size:13px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .species-card:active{ transform:scale(.97); }
+
+    .species-card img{
+      width:34px;height:34px;
+      border-radius:8px;
+      object-fit:cover;
+      flex-shrink:0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="brand-mark">🎣</div>
+          <div class="brand-text">
+            <h1 class="brand-name">C'mon Bell!</h1>
+            <p class="brand-sub">Fishing Log & Forecast</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="home-section" class="section active">
+        <div class="hero">
+          <div class="hero-inner">
+            <h2 class="hero-title">Track your catches & spots</h2>
+            <p class="hero-copy">Log your fishing trips, check live solunar forecasts, and see who's leading the board.</p>
+            <div class="hero-actions">
+              <button class="btn btn-primary" onclick="openAddCatchModal()">+ Log Catch</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-overlay" id="species-sheet">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 class="modal-title">Select Species</h3>
+          <p class="modal-sub">Choose a fish species from the catalog</p>
+        </div>
+        <div class="modal-body">
+          <input type="text" class="species-sheet-search" id="species-search-input" placeholder="Search species..." oninput="filterSpeciesSheet()" />
+          <div id="species-catalog-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Example Full Catalogs & Images Mapping
+    const SPECIES_IMAGES = {
+      "Largemouth Bass": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=100",
+      "Smallmouth Bass": "https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?w=100",
+      "Rainbow Trout": "https://images.unsplash.com/photo-1535591273668-578e3112a44f?w=100"
+      // Notice: Species without an image entry will be automatically excluded
+    };
+
+    const SPECIES_CATALOG = [
+      {
+        cat: "Bass & Sunfish",
+        species: ["Largemouth Bass", "Smallmouth Bass", "Rock Bass", "Bluegill"] // Rock Bass & Bluegill have no images, will be excluded
+      },
+      {
+        cat: "Trout & Salmon",
+        species: ["Rainbow Trout", "Brown Trout"] // Brown Trout has no image, will be excluded
+      }
+    ];
+
+    function renderSpeciesSheet(query = "") {
+      const container = document.getElementById('species-catalog-container');
+      if(!container) return;
+
+      const q = query.toLowerCase().trim();
+      let html = "";
+
+      SPECIES_CATALOG.forEach(group => {
+        // Filter species to ONLY include those that have a valid picture associated in SPECIES_IMAGES
+        const validSpecies = group.species.filter(name => {
+          const img = SPECIES_IMAGES[name];
+          if (!img || typeof img !== 'string' || img.trim() === "") return false;
+          // Apply search query filter if user is typing
+          if (q && !name.toLowerCase().includes(q)) return false;
+          return true;
+        });
+
+        if (validSpecies.length > 0) {
+          html += `<div class="species-cat-label">${group.cat}</div>`;
+          html += `<div class="species-grid">`;
+          validSpecies.forEach(name => {
+            const imgSrc = SPECIES_IMAGES[name];
+            html += `
+              <div class="species-card" onclick="selectSpecies('${name}')">
+                <img src="${imgSrc}" alt="${name}" />
+                <span>${name}</span>
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+      });
+
+      container.innerHTML = html || `<p style="text-align:center;color:var(--muted);padding:20px;">No matching species found with pictures.</p>`;
+    }
+
+    function filterSpeciesSheet() {
+      const input = document.getElementById('species-search-input');
+      renderSpeciesSheet(input ? input.value : "");
+    }
+
+    function openAddCatchModal() {
+      document.getElementById('species-sheet').classList.add('open');
+      renderSpeciesSheet();
+    }
+
+    function selectSpecies(name) {
+      alert("Selected species: " + name);
+      document.getElementById('species-sheet').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

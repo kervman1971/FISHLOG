@@ -1,0 +1,17 @@
+{
+  "name": "C'mon Bell! - Fishing Log",
+  "short_name": "C'mon Bell!",
+  "description": "Fish. Log. Catch. Repeat.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#021422",
+  "theme_color": "#0E4C63",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

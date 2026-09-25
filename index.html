@@ -1909,14 +1909,28 @@
       margin-bottom:12px;
       cursor:pointer;
       padding:18px 18px 16px;
-      border:1px solid var(--panel-border-2);
-      box-shadow:0 8px 26px rgba(5,20,45,.45);
+      border:2px solid rgba(242,169,59,.65);
+      box-shadow:0 0 0 1px rgba(242,169,59,.25), 0 12px 34px rgba(5,20,45,.5), 0 0 28px rgba(242,169,59,.22);
       transition:transform .15s ease, box-shadow .15s ease;
       background:
-        radial-gradient(120% 140% at 100% 0%, rgba(255,213,79,.4), transparent 55%),
-        linear-gradient(155deg, #0D4C9E, #0A2E63 55%, #051633);
+        radial-gradient(120% 140% at 100% 0%, rgba(242,169,59,.38), transparent 55%),
+        radial-gradient(90% 90% at 0% 100%, rgba(242,169,59,.14), transparent 60%),
+        linear-gradient(155deg, #0E4E9E, #0A2E63 55%, #051633);
     }
     .fishing-summary:active{ transform:scale(.98); }
+    .fishing-summary::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(105deg, transparent 42%, rgba(255,255,255,.16) 50%, transparent 58%);
+      transform:translateX(-110%);
+      animation:fs-sheen 5.5s ease-in-out infinite;
+    }
+    @keyframes fs-sheen{
+      0%,55%{ transform:translateX(-110%); }
+      92%,100%{ transform:translateX(110%); }
+    }
     .fishing-summary-scene{
       position:absolute;
       inset:0;
@@ -1933,23 +1947,32 @@
     }
     .fishing-summary-eyebrow{
       position:relative;
-      display:block;
+      display:inline-block;
       font-size:11px;
       font-weight:800;
       letter-spacing:.8px;
       text-transform:uppercase;
-      color:rgba(255,233,168,.85);
+      color:#FFD54F;
+      background:rgba(242,169,59,.16);
+      border:1px solid rgba(242,169,59,.55);
+      border-radius:999px;
+      padding:5px 12px;
       margin-bottom:12px;
+      box-shadow:0 0 12px rgba(242,169,59,.25);
     }
     .fishing-summary-headline{
       position:relative;
       font-family:"Baloo 2",sans-serif;
-      font-size:27px;
+      font-size:33px;
       font-weight:800;
       color:#fff;
       line-height:1.15;
       margin-bottom:14px;
-      text-shadow:0 2px 8px rgba(0,0,0,.3);
+      text-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+    .fishing-summary-headline .fs-headline-num{
+      color:#FFD54F;
+      text-shadow:0 0 18px rgba(242,169,59,.5);
     }
     .fishing-summary-headline span{
       font-family:"Quicksand",sans-serif;
@@ -1970,7 +1993,7 @@
     .fs-stat{ text-align:center; }
     .fs-stat-value{
       font-family:"Baloo 2",sans-serif;
-      font-size:19px;
+      font-size:21px;
       font-weight:800;
       color:#fff;
       line-height:1.1;
@@ -3021,6 +3044,7 @@
       }
       .bobber, .bobber-ripple{ animation:none !important; }
       .bobber-ripple{ opacity:.4 !important; }
+      .fishing-summary::after{ display:none !important; }
     }
 
     /* ── Contrast Boost (sunlight mode) ── */
@@ -6104,7 +6128,7 @@
         ${FISHING_SUMMARY_SCENE_SVG}
         <div class="fishing-summary-scrim"></div>
         <div class="fishing-summary-eyebrow">🎣 Your Fishing Summary</div>
-        <div class="fishing-summary-headline">${s.total} catch${s.total === 1 ? '' : 'es'} <span>logged all-time</span></div>
+        <div class="fishing-summary-headline"><span class="fs-headline-num">${s.total}</span> catch${s.total === 1 ? '' : 'es'} <span>logged all-time</span></div>
         <div class="fishing-summary-stats">
           <div class="fs-stat"><div class="fs-stat-value">${s.species}</div><div class="fs-stat-label">Species</div></div>
           <div class="fs-stat"><div class="fs-stat-value">${s.biggest ? s.biggest.toFixed(1) + ' lb' : '—'}</div><div class="fs-stat-label">Biggest</div></div>

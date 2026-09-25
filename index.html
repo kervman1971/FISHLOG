@@ -3736,8 +3736,10 @@
   <script>
     /* ── Splash screen ── */
     const __splashStart = Date.now();
-    const __SPLASH_MIN_MS = 7000;
+    const __splashSeen = (()=>{ try{ return localStorage.getItem('cb_splash_seen')==='1'; }catch(e){ return false; } })();
+    const __SPLASH_MIN_MS = __splashSeen ? 400 : 1600;
     (function initSplash(){
+      if(__splashSeen) return; // repeat launches skip the animated badge entirely
       const splashBadge = document.getElementById('splash-badge');
       const splashBadgeSource = document.getElementById('splash-badge-source');
       if(splashBadge && splashBadgeSource){
@@ -3748,17 +3750,23 @@
       }
 
     })();
-    function hideSplash(){
+    function hideSplash(skipWait){
       const el = document.getElementById('splash-screen');
       if(!el || el.dataset.hidden) return;
       el.dataset.hidden = '1';
+      try{ localStorage.setItem('cb_splash_seen','1'); }catch(e){}
       const elapsed = Date.now() - __splashStart;
-      const wait = Math.max(0, __SPLASH_MIN_MS - elapsed);
+      const wait = skipWait ? 0 : Math.max(0, __SPLASH_MIN_MS - elapsed);
       setTimeout(() => {
         el.classList.add('splash-hide');
         setTimeout(() => { el.remove(); }, 650);
       }, wait);
     }
+    // Tap anywhere on the splash to dismiss it immediately
+    (function(){
+      const el = document.getElementById('splash-screen');
+      if(el) el.addEventListener('click', function(){ hideSplash(true); });
+    })();
     // Safety net: never let the splash block the app for more than ~10.5s
     setTimeout(hideSplash, 10500);
 

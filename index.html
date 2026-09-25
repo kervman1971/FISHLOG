@@ -6619,9 +6619,12 @@
       if(!mapEl) return;
       if(!heatmapInstance){
         heatmapInstance = L.map('heatmap-map', { scrollWheelZoom:false });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          attribution:'&copy; OpenStreetMap contributors &copy; CARTO',
-          maxZoom:19
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+          attribution:'&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          maxZoom:16
+        }).addTo(heatmapInstance);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom:16
         }).addTo(heatmapInstance);
       }
       if(!hmControlsWired){

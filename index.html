@@ -3078,16 +3078,11 @@
     .setting-hint{ margin:8px 2px 0; font-size:12px; color:var(--muted); }
 
     /* ── Catch Heat Map tab ── */
-    #heatmap-map{ width:100%; height:min(62vh,540px); border-radius:20px; border:1px solid var(--panel-border); overflow:hidden; position:relative; isolation:isolate; z-index:0; }
-    .hm-controls{ display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
-    .hm-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .hm-seg{ display:inline-flex; border:1px solid var(--panel-border); border-radius:999px; overflow:hidden; background:var(--panel); }
-    .hm-seg button{ background:transparent; border:0; color:var(--ink); font-size:12px; font-weight:600; padding:7px 14px; cursor:pointer; }
-    .hm-seg button.on{ background:var(--amber); color:#1a1206; }
-    .hm-chip{ border:1px solid var(--panel-border); background:var(--panel); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; }
-    .hm-chip.on{ background:var(--amber); border-color:var(--amber); color:#1a1206; }
-    .hm-stats{ font-size:12px; color:var(--muted); }
-    .hm-stats b{ color:var(--ink); }
+    /* Heat overlay on the Spots map */
+    #spot-heat-btn.on{ background:var(--amber); border-color:var(--amber); color:#1a1206; }
+    .sh-chip{ border:1px solid var(--panel-border); background:var(--panel); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+    .sh-chip.on{ background:var(--amber); border-color:var(--amber); color:#1a1206; }
+    #spot-heat-stats b{ color:var(--ink); }
   </style>
 <body>
   <div id="splash-screen" aria-hidden="true">
@@ -3274,40 +3269,18 @@
             <p>Map your holes, notes, and repeat performers.</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="spot-heat-btn" onclick="toggleSpotHeat()" style="display:none">🔥 Heat</button>
             <button class="btn btn-secondary btn-sm" id="map-toggle-btn" onclick="toggleSpotMap()">🗺️ Show Map</button>
             <button class="btn btn-primary btn-sm" onclick="openSpotModal()">+ Add Spot</button>
           </div>
         </div>
         <div id="spot-map-wrap" style="display:none;margin-bottom:14px">
           <div id="spot-map" style="position:relative;isolation:isolate;z-index:0;width:100%;height:360px;border-radius:20px;border:3px solid var(--navy);overflow:hidden"></div>
+          <div id="spot-heat-chips" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
+          <div id="spot-heat-stats" style="display:none;font-size:12px;color:var(--muted);margin-top:6px"></div>
           <button class="btn btn-secondary btn-sm" onclick="openNauticalChartForMapView()" style="margin-top:8px;width:100%">🌊 Nautical Chart for This Area</button>
         </div>
         <div id="spot-grid" class="spot-grid"></div>
-      </section>
-
-      <section class="section" id="tab-heatmap">
-        <div class="page-head">
-          <div>
-            <h2>Catch Heat Map</h2>
-            <p>Where the fish actually are, from every logged catch.</p>
-          </div>
-        </div>
-        <div class="hm-controls">
-          <div class="hm-row">
-            <div class="hm-seg" id="hm-layer-seg">
-              <button data-layer="heat" class="on">🔥 Heat</button>
-              <button data-layer="points">📍 Points</button>
-              <button data-layer="both">Both</button>
-            </div>
-            <div class="hm-seg" id="hm-spot-seg">
-              <button data-spots="on" class="on">Spots on</button>
-              <button data-spots="off">Spots off</button>
-            </div>
-          </div>
-          <div class="hm-row" id="hm-species-chips"></div>
-          <div class="hm-stats" id="hm-stats"></div>
-        </div>
-        <div id="heatmap-map"></div>
       </section>
 
       <section class="section" id="tab-stats">
@@ -3401,10 +3374,6 @@
           <button class="more-item" data-tab="intel" onclick="moreNavigate('intel')">
             <span class="more-icon">🐟</span>
             <span class="more-label">Fish Intel</span>
-          </button>
-          <button class="more-item" data-tab="heatmap" onclick="moreNavigate('heatmap')">
-            <span class="more-icon">🔥</span>
-            <span class="more-label">Heat Map</span>
           </button>
           <button class="more-item" onclick="closeModals(); document.getElementById('export-modal').classList.add('open')">
             <span class="more-icon">💾</span>
@@ -4626,7 +4595,7 @@
       }).join('');
     }
 
-    const MORE_TABS = ['trips','forecast','planner','stats','bait','intel','heatmap'];
+    const MORE_TABS = ['trips','forecast','planner','stats','bait','intel'];
 
     function goHome(){
       closeModals();
@@ -6586,12 +6555,16 @@
       spotMapVisible = !spotMapVisible;
       const wrap = document.getElementById('spot-map-wrap');
       const btn = document.getElementById('map-toggle-btn');
+      const heatBtn = document.getElementById('spot-heat-btn');
       if(spotMapVisible){
         wrap.style.display = 'block';
+        heatBtn.style.display = '';
         btn.textContent = '📋 Show List';
         renderSpotMap();
       } else {
         wrap.style.display = 'none';
+        heatBtn.style.display = 'none';
+        if(spotHeatOn) toggleSpotHeat();
         btn.textContent = '🗺️ Show Map';
       }
     }
@@ -6611,6 +6584,9 @@
       spotMapInstance.eachLayer(layer => {
         if(layer instanceof L.Marker) spotMapInstance.removeLayer(layer);
       });
+
+      // Re-apply the heat overlay if enabled, so it stays fresh after data changes
+      if(spotHeatOn) renderSpotHeat();
 
       if(!pinned.length){
         spotMapInstance.setView([39.5, -98.35], 4); // center of US as fallback
@@ -6635,111 +6611,54 @@
       setTimeout(() => spotMapInstance.invalidateSize(), 50);
     }
 
-    /* ── Catch Heat Map tab ── */
-    let heatmapInstance = null;
-    let hmHeatLayer = null, hmPointsLayer = null, hmSpotsLayer = null;
-    let hmState = { layer:'heat', spots:true, species:'All' };
-    let hmControlsWired = false;
+    /* Heat overlay on the Spots map */
+    let spotHeatOn = false, spotHeatLayer = null, spotHeatSpecies = 'All';
 
-    function renderHeatmap(){
-      const mapEl = document.getElementById('heatmap-map');
-      if(!mapEl) return;
-      if(!heatmapInstance){
-        heatmapInstance = L.map('heatmap-map', { scrollWheelZoom:false });
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          attribution:'&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-          maxZoom:16
-        }).addTo(heatmapInstance);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-          maxZoom:16
-        }).addTo(heatmapInstance);
-      }
-      if(!hmControlsWired){
-        hmControlsWired = true;
-        document.getElementById('hm-layer-seg').addEventListener('click', e => {
-          const b = e.target.closest('button'); if(!b) return;
-          hmState.layer = b.dataset.layer;
-          document.querySelectorAll('#hm-layer-seg button').forEach(x => x.classList.toggle('on', x === b));
-          renderHeatmap();
-        });
-        document.getElementById('hm-spot-seg').addEventListener('click', e => {
-          const b = e.target.closest('button'); if(!b) return;
-          hmState.spots = b.dataset.spots === 'on';
-          document.querySelectorAll('#hm-spot-seg button').forEach(x => x.classList.toggle('on', x === b));
-          renderHeatmap();
-        });
-        document.getElementById('hm-species-chips').addEventListener('click', e => {
-          const b = e.target.closest('button'); if(!b) return;
-          hmState.species = b.dataset.species;
-          document.querySelectorAll('#hm-species-chips .hm-chip').forEach(x => x.classList.toggle('on', x === b));
-          renderHeatmap();
-        });
-      }
+    function toggleSpotHeat(){
+      spotHeatOn = !spotHeatOn;
+      document.getElementById('spot-heat-btn').classList.toggle('on', spotHeatOn);
+      document.getElementById('spot-heat-chips').style.display = spotHeatOn ? 'flex' : 'none';
+      document.getElementById('spot-heat-stats').style.display = spotHeatOn ? 'block' : 'none';
+      renderSpotHeat();
+    }
+
+    function setSpotHeatSpecies(sp){
+      spotHeatSpecies = sp;
+      renderSpotHeat();
+    }
+
+    function renderSpotHeat(){
+      if(!spotMapInstance) return;
+      if(spotHeatLayer){ spotMapInstance.removeLayer(spotHeatLayer); spotHeatLayer = null; }
 
       const plotted = catches
         .map(c => ({ c, coords: parseCoords(c.coords) }))
         .filter(x => x.coords);
-      const visible = hmState.species === 'All'
-        ? plotted
-        : plotted.filter(x => (x.c.species || 'Unknown') === hmState.species);
-
-      if(hmHeatLayer){ heatmapInstance.removeLayer(hmHeatLayer); hmHeatLayer = null; }
-      if(hmPointsLayer){ heatmapInstance.removeLayer(hmPointsLayer); hmPointsLayer = null; }
-      if(hmSpotsLayer){ heatmapInstance.removeLayer(hmSpotsLayer); hmSpotsLayer = null; }
-
-      if(visible.length){
-        if(hmState.layer === 'heat' || hmState.layer === 'both'){
-          hmHeatLayer = L.heatLayer(visible.map(x => [x.coords.lat, x.coords.lng, 1]), {
-            radius:28, blur:18, maxZoom:16, minOpacity:.35,
-            gradient:{ 0.25:'#2B9CBD', 0.55:'#F2A93B', 0.8:'#C24E3A' }
-          }).addTo(heatmapInstance);
-        }
-        if(hmState.layer === 'points' || hmState.layer === 'both'){
-          hmPointsLayer = L.layerGroup(visible.map(x => {
-            const c = x.c;
-            const det = [c.length ? c.length + ' in' : '', c.weight ? c.weight + ' lb' : ''].filter(Boolean).join(' · ');
-            const html = `<strong>${c.species || 'Unknown'}</strong>` +
-              (c.date ? `<br/>${c.date}` : '') +
-              (c.angler ? ` · ${c.angler}` : '') +
-              (det ? `<br/>${det}` : '') +
-              (c.lure ? `<br/>Lure: ${c.lure}` : '');
-            return L.circleMarker([x.coords.lat, x.coords.lng], {
-              radius:5, color:'#F2A93B', weight:2, fillColor:'#F2A93B', fillOpacity:.85
-            }).bindPopup(html);
-          })).addTo(heatmapInstance);
-        }
-        heatmapInstance.fitBounds(L.latLngBounds(visible.map(x => [x.coords.lat, x.coords.lng])).pad(0.15));
-      } else {
-        heatmapInstance.setView([45.5, -73.6], 10);
-      }
-
-      if(hmState.spots){
-        const pinned = spots.map(s => ({ s, coords: parseCoords(s.coords) })).filter(x => x.coords);
-        hmSpotsLayer = L.layerGroup(pinned.map(({s, coords}) => {
-          const count = catches.filter(c => c.spotId === s.id).length;
-          const html = `<strong>${s.name || 'Unnamed spot'}</strong>` +
-            (s.type ? `<br/>${s.type}` : '') +
-            (count ? `<br/>${count} catch${count===1?'':'es'} logged` : '') +
-            (s.notes ? `<br/>${s.notes}` : '');
-          return L.marker([coords.lat, coords.lng]).bindPopup(html);
-        })).addTo(heatmapInstance);
-      }
-
       const speciesList = [...new Set(plotted.map(x => x.c.species || 'Unknown'))].sort();
-      if(hmState.species !== 'All' && !speciesList.includes(hmState.species)) hmState.species = 'All';
-      document.getElementById('hm-species-chips').innerHTML =
+      if(spotHeatSpecies !== 'All' && !speciesList.includes(spotHeatSpecies)) spotHeatSpecies = 'All';
+      const visible = spotHeatSpecies === 'All'
+        ? plotted
+        : plotted.filter(x => (x.c.species || 'Unknown') === spotHeatSpecies);
+
+      if(spotHeatOn && visible.length){
+        spotHeatLayer = L.heatLayer(visible.map(x => [x.coords.lat, x.coords.lng, 1]), {
+          radius:28, blur:18, maxZoom:16, minOpacity:.35,
+          gradient:{ 0.25:'#2B9CBD', 0.55:'#F2A93B', 0.8:'#C24E3A' }
+        }).addTo(spotMapInstance);
+      }
+
+      document.getElementById('spot-heat-chips').innerHTML =
         ['All', ...speciesList].map(sp =>
-          `<button class="hm-chip${sp === hmState.species ? ' on' : ''}" data-species="${sp}">${sp}</button>`
+          `<button class="sh-chip${sp === spotHeatSpecies ? ' on' : ''}" data-species="${sp.replace(/"/g, '&quot;')}" onclick="setSpotHeatSpecies(this.dataset.species)">${sp}</button>`
         ).join('');
 
       const missing = catches.length - plotted.length;
-      document.getElementById('hm-stats').innerHTML =
+      document.getElementById('spot-heat-stats').innerHTML =
         `<b>${visible.length}</b> of <b>${catches.length}</b> catches plotted` +
         (missing ? ` · ${missing} without GPS` : '') +
-        (hmState.species !== 'All' ? ` · filtered: ${hmState.species}` : '');
-
-      setTimeout(() => heatmapInstance.invalidateSize(), 60);
+        (spotHeatSpecies !== 'All' ? ` · filtered: ${spotHeatSpecies}` : '');
     }
+
 
     // Opens i-Boating's chart viewer centered on wherever the full map is currently panned/zoomed to
     function openNauticalChartForMapView(){
@@ -7383,7 +7302,6 @@
       renderIntel();
       renderTicker();
       if(spotMapVisible) renderSpotMap();
-      if(currentTab === 'heatmap') renderHeatmap();
       if(lastSolunarLat !== null) renderForecastStrip(lastSolunarLat, lastSolunarLng);
     }
 

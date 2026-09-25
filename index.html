@@ -44,6 +44,9 @@
       --teal-soft:rgba(43,156,189,.18);
       --violet:#178A9E;
       --violet-2:#5CC8DE;
+      --amber:#F2A93B;
+      --amber-bright:#FFC966;
+      --amber-soft:rgba(242,169,59,.16);
       --danger:#C24E3A;
       --danger-soft:rgba(194,78,58,.2);
       --card-bg:#0F3A4D;
@@ -1423,17 +1426,17 @@
       font-size:14px;
     }
     .sticky-bar .btn-primary{
-      background:linear-gradient(155deg, #2B9CBD, #29ABE2);
-      color:#051820;
+      background:linear-gradient(155deg, var(--amber-bright), var(--amber) 60%, #C07F22);
+      color:#1a1206;
       border:2px solid #000;
       box-shadow:
-        0 0 0 1px rgba(255,255,255,.2) inset,
-        0 7px 0 #0B4F6C,
-        0 7px 20px rgba(43,156,189,.4);
+        0 0 0 1px rgba(255,255,255,.25) inset,
+        0 7px 0 #7A4E12,
+        0 7px 20px rgba(242,169,59,.4);
     }
     .sticky-bar .btn-primary:active{
       transform:translateY(5px);
-      box-shadow:0 0 0 1px rgba(255,255,255,.2) inset, 0 2px 0 #0B4F6C;
+      box-shadow:0 0 0 1px rgba(255,255,255,.25) inset, 0 2px 0 #7A4E12;
     }
 
     /* footer-space must clear both the bottom-nav (~60px) and sticky-bar (~70px) */
@@ -2055,9 +2058,9 @@
       margin-bottom:12px;
     }
     .daylight-bar-status.is-active{
-      background:rgba(255,209,102,.16);
-      border-color:rgba(255,209,102,.55);
-      color:#FFD166;
+      background:var(--amber-soft);
+      border-color:rgba(242,169,59,.55);
+      color:var(--amber-bright);
     }
     .daylight-bar-labels{
       display:flex;
@@ -2136,7 +2139,7 @@
       vertical-align:middle;
       border:1px solid rgba(255,255,255,.35);
     }
-    .legend-dot-major{ background:#FFD166; }
+    .legend-dot-major{ background:var(--amber-bright); }
     .legend-dot-minor{ background:#7ED0E7; }
     .daylight-bar-windows-list{
       display:flex;
@@ -2157,8 +2160,8 @@
       padding:4px 10px 4px 8px;
     }
     .daylight-window-chip.is-active{
-      background:rgba(255,209,102,.14);
-      border-color:rgba(255,209,102,.6);
+      background:var(--amber-soft);
+      border-color:rgba(242,169,59,.6);
     }
     .daylight-window-chip .legend-dot{ margin-right:0; }
     .daylight-bar-ticks{
@@ -2246,6 +2249,15 @@
       font-weight:700;
       margin-top:3px;
     }
+    .weather-pressure{
+      font-size:11px;
+      color:var(--ink-2);
+      font-weight:700;
+      margin-top:2px;
+    }
+    .weather-pressure .p-falling{ color:var(--amber-bright); }
+    .weather-pressure .p-rising{ color:#7ED0E7; }
+    .weather-pressure .p-steady{ color:var(--muted); }
 
     .weather-loc{
       font-size:10px;
@@ -2339,8 +2351,8 @@
       flex-wrap:wrap;
     }
     .solunar-status.active{
-      background:rgba(43,156,189,.12);
-      border:1px solid rgba(43,156,189,.55);
+      background:var(--amber-soft);
+      border:1px solid rgba(242,169,59,.55);
     }
     .solunar-status.quiet{
       background:rgba(255,255,255,.05);
@@ -2353,7 +2365,7 @@
       font-weight:800;
       color:#fff;
     }
-    .solunar-status.active .solunar-status-main{ color:var(--gold-2); }
+    .solunar-status.active .solunar-status-main{ color:var(--amber-bright); }
 
     .solunar-status-detail{
       font-size:11px;
@@ -4903,10 +4915,41 @@
       return '🌤️';
     }
 
+    /* ── Barometric pressure trend: compares current pressure_msl against ~3h ago.
+       Returns { value, delta, trend } or null when data is unavailable. ── */
+    function computePressureTrend(data){
+      try{
+        const cur = (data && data.current && typeof data.current.pressure_msl === 'number')
+          ? data.current.pressure_msl : null;
+        const hp = (data && data.hourly && Array.isArray(data.hourly.pressure_msl))
+          ? data.hourly.pressure_msl : null;
+        const ht = (data && data.hourly && Array.isArray(data.hourly.time))
+          ? data.hourly.time : null;
+        if(cur === null || !hp || !ht || hp.length !== ht.length || !hp.length) return null;
+        const nowMs = Date.now();
+        const target = nowMs - 3*3600*1000;
+        let best = -1, bestDiff = Infinity;
+        for(let i = 0; i < ht.length; i++){
+          if(typeof hp[i] !== 'number') continue;
+          const t = new Date(ht[i]).getTime();
+          if(isNaN(t) || t > nowMs) continue; // past hours only
+          const d = Math.abs(t - target);
+          if(d < bestDiff){ bestDiff = d; best = i; }
+        }
+        if(best < 0) return null;
+        const delta = cur - hp[best];
+        const trend = delta <= -2.5 ? 'falling' : (delta >= 2.5 ? 'rising' : 'steady');
+        return { value: cur, delta: delta, trend: trend };
+      }catch(e){ return null; }
+    }
+
     function renderWeatherWidget(data, label){
       const widget = document.getElementById('weather-widget');
       const temp = Math.round(data.current.temperature_2m);
       const icon = weatherCodeToIcon(data.current.weather_code);
+      const pressure = computePressureTrend(data);
+      const pressureHtml = pressure ? `
+            <div class="weather-pressure">${pressure.value.toFixed(0)} hPa <span class="p-${pressure.trend}">${pressure.trend === 'falling' ? '&#8600; falling' : pressure.trend === 'rising' ? '&#8599; rising' : '&#8594; steady'}</span></div>` : '';
 
       const now = new Date();
       const hourly = data.hourly;
@@ -4927,7 +4970,7 @@
             <div class="weather-icon">${icon}</div>
             <div>
               <div class="weather-temp">${temp}°C</div>
-              <div class="weather-cond">${label}</div>
+              <div class="weather-cond">${label}</div>${pressureHtml}
             </div>
           </div>
           <button class="weather-refresh" onclick="fetchLocalWeather(true)">↻ Refresh</button>
@@ -4958,7 +5001,7 @@
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         try{
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&temperature_unit=celsius&wind_speed_unit=kmh&forecast_days=1`);
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,pressure_msl&hourly=temperature_2m,weather_code,pressure_msl&temperature_unit=celsius&wind_speed_unit=kmh&forecast_days=1&past_days=1`);
           if(!res.ok) throw new Error('Weather fetch failed');
           const data = await res.json();
           const label = weatherCodeToLabel(data.current.weather_code, data.current.wind_speed_10m);
@@ -4967,7 +5010,8 @@
           currentWeather = {
             label,
             temp,
-            coords: `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+            coords: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+            pressure: computePressureTrend(data)
           };
 
           renderWeatherWidget(data, label);
@@ -5392,7 +5436,7 @@
           const startP = pct(w.start);
           const endP = pct(w.end);
           const width = Math.max(1.2, endP - startP);
-          const fill = w.major ? '#FFD166' : '#7ED0E7';
+          const fill = w.major ? '#FFC966' : '#7ED0E7';
           const stroke = w.active ? '#fff' : 'none';
           return `<rect x="${startP.toFixed(2)}" y="19" width="${width.toFixed(2)}" height="8" fill="${fill}" stroke="${stroke}" stroke-width="0.6" rx="2.5"/>`;
         }).join('');
@@ -5674,7 +5718,7 @@
         const lng = pos.coords.longitude;
         try{
           showToast('Fetching weather…', 'info');
-          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=celsius&wind_speed_unit=kmh`);
+          const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,pressure_msl&temperature_unit=celsius&wind_speed_unit=kmh`);
           if(!res.ok) throw new Error('Weather fetch failed');
           const data = await res.json();
           const temp = Math.round(data.current.temperature_2m);
@@ -6954,6 +6998,12 @@
 
       if(currentWeather){
         items.push({ icon:'🌡️', text:`${currentWeather.temp}°F, ${currentWeather.label} right now`, tab:'dashboard' });
+        const p = currentWeather.pressure;
+        if(p && p.trend === 'falling'){
+          items.push({ icon:'📉', text:`Pressure dropping fast (${p.value.toFixed(1)} hPa and falling) — fish should be feeding`, tab:'dashboard' });
+        } else if(p && p.trend === 'rising'){
+          items.push({ icon:'📈', text:`Pressure rising fast (${p.value.toFixed(1)} hPa and climbing) — post-frontal, tougher bite`, tab:'dashboard' });
+        }
       }
 
       if(catches.length){

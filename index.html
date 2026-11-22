@@ -1577,10 +1577,18 @@
       border:1px solid #A8CBD6;
       border-radius:var(--radius-xs);
       text-align:center;
-      color:#22392C;
+      color:#F8F1DC;
       font-size:16px;
       font-weight:800;
+      position:relative;
     }
+
+    .species-info{ position:absolute; top:4px; right:6px; width:20px; height:20px; border-radius:50%; background:rgba(248,241,220,.16); color:#F8F1DC; font-size:12px; font-weight:900; display:flex; align-items:center; justify-content:center; line-height:1; }
+    .species-info:active{ background:rgba(248,241,220,.35); }
+
+    .species-profile-photo{ width:100%; height:190px; object-fit:cover; border-radius:10px; margin-bottom:12px; }
+    .species-profile-text{ font-size:14px; font-weight:600; line-height:1.6; color:#F8F1DC; }
+    .species-profile-link{ display:inline-block; margin-top:12px; font-weight:800; color:#F2A93B; }
     .species-card:active{ background:rgba(30,70,52,.18); }
     .species-card.selected{
       border-color:var(--gold);
@@ -3422,6 +3430,20 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="species-profile-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title" id="species-profile-title">Species</h3>
+        <p class="modal-sub" id="species-profile-sub">From iNaturalist</p>
+      </div>
+      <div class="modal-body" id="species-profile-body">
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" onclick="closeSpeciesProfile()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="compress-photos-modal">
     <div class="modal">
       <div class="modal-head">
@@ -4425,6 +4447,46 @@
       document.getElementById('species-sheet').classList.remove('open');
     }
 
+    // Species profiles via iNaturalist taxa (photo + Wikipedia summary). FishWatch's
+    // API is retired (301s to an HTML page) and profiles only Atlantic Salmon, so
+    // iNaturalist covers every species in the catalog instead. Results are cached.
+    const speciesProfileCache = {};
+    async function openSpeciesProfile(name){
+      document.getElementById('species-profile-title').textContent = name;
+      document.getElementById('species-profile-sub').textContent = 'Loading…';
+      const body = document.getElementById('species-profile-body');
+      body.innerHTML = '<div class="inat-status">Looking up this species on iNaturalist…</div>';
+      document.getElementById('species-profile-modal').classList.add('open');
+      if(speciesProfileCache[name]){ renderSpeciesProfile(name, speciesProfileCache[name]); return; }
+      try{
+        const r = await fetch('https://api.inaturalist.org/v1/taxa?q=' + encodeURIComponent(name) + '&rank=species&per_page=1');
+        if(!r.ok) throw new Error('taxa failed');
+        const j = await r.json();
+        const t = (j.results || [])[0];
+        if(!t) throw new Error('no taxon');
+        speciesProfileCache[name] = t;
+        renderSpeciesProfile(name, t);
+      }catch(e){
+        document.getElementById('species-profile-sub').textContent = 'Couldn’t load a profile';
+        body.innerHTML = '<div class="inat-status">No profile found for this species, or iNaturalist couldn’t be reached. Check your connection and try again.</div>';
+      }
+    }
+    function renderSpeciesProfile(name, t){
+      const photo = t.default_photo ? (t.default_photo.medium_url || t.default_photo.url) : null;
+      const sci = t.name || '';
+      const summary = (t.wikipedia_summary || '').replace(/<[^>]+>/g, '').trim();
+      document.getElementById('species-profile-sub').textContent = sci ? ('Scientific name: ' + sci) : 'From iNaturalist';
+      const obsCount = t.observations_count ? t.observations_count.toLocaleString() + ' observations reported on iNaturalist' : '';
+      const fallback = [sci, obsCount].filter(Boolean).join(' · ');
+      document.getElementById('species-profile-body').innerHTML =
+        (photo ? '<img class="species-profile-photo" src="' + escHtml(photo) + '" alt="' + escHtml(name) + '">' : '') +
+        (summary ? '<p class="species-profile-text">' + escHtml(summary) + '</p>' : (fallback ? '<p class="species-profile-text">' + escHtml(fallback) + '.</p>' : '<p class="species-profile-text">No description available yet.</p>')) +
+        '<a class="species-profile-link" href="https://www.inaturalist.org/taxa/' + t.id + '" target="_blank" rel="noopener">See it on iNaturalist →</a>' +
+        (t.wikipedia_url ? ' &nbsp;·&nbsp; <a class="species-profile-link" href="' + escHtml(t.wikipedia_url) + '" target="_blank" rel="noopener">Wikipedia →</a>' : '');
+    }
+    function closeSpeciesProfile(){ document.getElementById('species-profile-modal').classList.remove('open'); }
+
+
     function renderSpeciesPicker(filterText){
       const q = (filterText || '').trim().toLowerCase();
       const current = document.getElementById('f-species').value;
@@ -4442,6 +4504,7 @@
                   ? `<img class="species-card-img" src="${SPECIES_IMAGES[s]}" alt="${s}" />`
                   : `<span class="species-card-icon">${emojiForSpecies(s)}</span>`}
                 <span>${s}</span>
+                <span class="species-info" title="About this species" onclick="event.stopPropagation(); openSpeciesProfile('${s.replace(/'/g,"\\'")}')">ⓘ</span>
               </button>
             `).join('')}
           </div>

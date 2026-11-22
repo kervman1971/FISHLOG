@@ -1532,11 +1532,24 @@
       border-radius:var(--radius-xs);
       border:1px solid #A8CBD6;
       background:#22392C;
-      color:#22392C;
+      color:#F8F1DC;
       font-size:14px;
       font-weight:600;
       margin-bottom:14px;
     }
+
+    .species-sheet-search::placeholder{ color:rgba(248,241,220,.55); }
+
+    .nominatim-suggest{ margin-top:10px; font-size:13px; font-weight:700; color:var(--ink); background:rgba(242,223,169,.55); border:1px solid var(--panel-border); border-radius:8px; padding:9px 11px; line-height:1.5; }
+
+    .inat-results{ margin-top:10px; }
+    .inat-title{ font-size:12px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; color:var(--ink); margin-bottom:8px; }
+    .inat-status{ font-size:13px; font-weight:700; color:var(--muted); }
+    .inat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px; }
+    .inat-card{ display:block; border:1px solid var(--panel-border); border-radius:10px; overflow:hidden; background:#fff; text-decoration:none; color:var(--ink); }
+    .inat-card img{ width:100%; height:72px; object-fit:cover; display:block; }
+    .inat-name{ display:block; font-size:11px; font-weight:800; padding:4px 6px 0; line-height:1.25; }
+    .inat-when{ display:block; font-size:10.5px; font-weight:600; color:var(--muted); padding:0 6px 5px; }
 
     .species-cat-label{
       font-size:11px;
@@ -3723,6 +3736,10 @@
               <button class="btn btn-secondary btn-sm" onclick="getGPS('s-coords')">Use My Location</button>
             </div>
           </div>
+          <div class="field-group full">
+            <button class="btn btn-tertiary btn-sm" id="suggest-name-btn" onclick="suggestSpotName()">✨ Suggest a name from the map</button>
+            <div id="spot-name-suggestion" class="nominatim-suggest" style="display:none"></div>
+          </div>
           <div class="field-group">
             <div class="field-label">Water Type</div>
             <select class="select" id="s-type">
@@ -4367,8 +4384,9 @@
       { cat:'Panfish', species:['Bluegill','Crappie (Black)','Yellow Perch'] },
       { cat:'Walleye', species:['Walleye'] },
       { cat:'Catfish', species:['Channel Catfish'] },
+      { cat:'Sturgeon', species:['Lake Sturgeon'] },
       { cat:'Carp & Tench', species:['Common Carp','Tench'] },
-      { cat:'Other Freshwater', species:['American Eel','Bowfin','Fallfish','Freshwater Drum','Goldeye','Longnose Gar','Mooneye'] },
+      { cat:'Other Freshwater', species:['American Eel','Bowfin','Fallfish','Freshwater Drum','Goldeye','Longnose Gar','Mooneye','Silver Chub'] },
       { cat:'Other', species:['Other'] }
     ];
 
@@ -4985,6 +5003,65 @@
         document.getElementById(fieldId).value = `${lat}, ${lng}`;
         showToast('📍 Location captured!', 'success');
       }, () => showToast('Could not get your location.', 'error'));
+    }
+
+    function escHtml(s){ return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    // Nominatim (OpenStreetMap): suggest a spot name from GPS coordinates. No key needed.
+    async function suggestSpotName(){
+      const box = document.getElementById('spot-name-suggestion');
+      const btn = document.getElementById('suggest-name-btn');
+      const m = (document.getElementById('s-coords').value || '').trim().match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+      if(!m){ box.style.display = 'block'; box.textContent = 'Enter GPS coordinates first — or tap “Use My Location”.'; return; }
+      btn.disabled = true; btn.textContent = 'Looking up the place…';
+      box.style.display = 'block'; box.textContent = 'Asking OpenStreetMap…';
+      try{
+        const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(m[1]) + '&lon=' + encodeURIComponent(m[2]) + '&zoom=16');
+        if(!r.ok) throw new Error('lookup failed');
+        const j = await r.json();
+        const a = j.address || {};
+        const name = j.name || a.waterway || a.river || a.neighbourhood || a.suburb || a.road || a.city || a.town || a.village || a.county || '';
+        if(!name){ box.textContent = 'No place name found for these coordinates.'; return; }
+        box.innerHTML = 'Near: <b>' + escHtml(name) + '</b> <button class="btn btn-primary btn-sm" onclick="useSuggestedSpotName(this)" data-name="' + escHtml(name) + '">Use this name</button>';
+      }catch(e){
+        box.textContent = 'Couldn’t reach OpenStreetMap — check your connection and try again.';
+      }finally{
+        btn.disabled = false; btn.textContent = '✨ Suggest a name from the map';
+      }
+    }
+    function useSuggestedSpotName(btn){
+      document.getElementById('s-name').value = btn.getAttribute('data-name') || '';
+      document.getElementById('spot-name-suggestion').style.display = 'none';
+    }
+
+    // iNaturalist: fish observations reported near a spot (ray-finned fishes, 5 km)
+    async function toggleNearbySightings(spotId){
+      const box = document.getElementById('inat-' + spotId);
+      if(!box) return;
+      if(box.style.display !== 'none'){ box.style.display = 'none'; return; }
+      box.style.display = 'block';
+      if(box.dataset.loaded){ return; }
+      box.innerHTML = '<div class="inat-status">Checking iNaturalist for fish seen near here…</div>';
+      const spot = spots.find(s => s.id === spotId);
+      const c = spot ? parseCoords(spot.coords) : null;
+      if(!c){ box.innerHTML = '<div class="inat-status">This spot has no coordinates saved.</div>'; return; }
+      try{
+        const url = 'https://api.inaturalist.org/v1/observations?taxon_id=47178&lat=' + c.lat + '&lng=' + c.lng + '&radius=5&per_page=8&order=desc&order_by=observed_on&photos=true';
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('inat failed');
+        const j = await r.json();
+        const obs = (j.results || []).filter(o => o.photos && o.photos.length);
+        if(!obs.length){ box.innerHTML = '<div class="inat-status">No fish observations reported within 5 km of this spot yet.</div>'; box.dataset.loaded = '1'; return; }
+        box.innerHTML = '<div class="inat-title">🐟 Seen near here (iNaturalist)</div><div class="inat-grid">' + obs.map(o => {
+          const ph = o.photos[0].url.replace('square', 'small');
+          const name = (o.taxon && (o.taxon.preferred_common_name || o.taxon.name)) || 'Fish';
+          const when = o.observed_on || '';
+          return '<a class="inat-card" href="https://www.inaturalist.org/observations/' + o.id + '" target="_blank" rel="noopener"><img src="' + escHtml(ph) + '" alt="' + escHtml(name) + '" loading="lazy"><span class="inat-name">' + escHtml(name) + '</span><span class="inat-when">' + escHtml(when) + '</span></a>';
+        }).join('') + '</div>';
+        box.dataset.loaded = '1';
+      }catch(e){
+        box.innerHTML = '<div class="inat-status">Couldn’t reach iNaturalist — check your connection and try again.</div>';
+      }
     }
 
     function setWeather(v){ document.getElementById('f-weather').value = v; }
@@ -6461,7 +6538,9 @@
               <button class="btn btn-secondary btn-sm" onclick="focusSpotOnMap('${s.id}')">🗺️ View on Map</button>
               <button class="btn btn-secondary btn-sm" onclick="getDirectionsForSpot('${s.id}')">🧭 Directions</button>
               <button class="btn btn-secondary btn-sm" onclick="openNauticalChart('${s.id}')">🌊 Nautical Chart</button>
-            </div>` : ''}
+              <button class="btn btn-secondary btn-sm" onclick="toggleNearbySightings('${s.id}')">🔍 Nearby sightings</button>
+            </div>
+            <div class="inat-results" id="inat-${s.id}" style="display:none"></div>` : ''}
             <div class="spot-footer">
               <div class="count">${lastFishedText}</div>
               <div class="count">${s.created ? `Added ${timeAgoFromISO(s.created)}` : `${count} total`}</div>

@@ -1544,6 +1544,10 @@
     .nearby-spot-note{ margin-top:10px; font-size:13px; font-weight:700; color:var(--ink); background:rgba(30,70,52,.10); border:1.5px solid #1E4634; border-radius:10px; padding:10px 12px; line-height:1.5; }
     .nearby-spot-note.warn{ background:rgba(242,169,59,.16); border-color:#C98A1B; }
     .nearby-spot-note button{ margin-left:6px; font-weight:800; color:#B23A17; background:none; border:none; padding:0; cursor:pointer; font-size:13px; text-decoration:underline; }
+    .catch-map-pin{ background:transparent; border:none; }
+    .catch-map-pin div{ width:30px; height:30px; border-radius:50%; border:2.5px solid #F8F1DC; color:#F8F1DC; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,.35); }
+    .catch-map-popup-row{ display:block; padding:5px 0; border-top:1px solid rgba(34,57,44,.15); font-size:13px; color:var(--ink); text-decoration:none; cursor:pointer; }
+    .catch-map-popup-row:first-of-type{ border-top:none; }
 
     .inat-results{ margin-top:10px; }
     .inat-title{ font-size:12px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; color:var(--ink); margin-bottom:8px; }
@@ -3219,7 +3223,10 @@
             <h2>Catch Log</h2>
             <p>Search your field notes and review the story behind every fish.</p>
           </div>
-          <button class="btn btn-secondary btn-sm" id="catch-view-toggle-btn" onclick="toggleCatchViewMode()">🖼️ Grid View</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="catch-map-toggle-btn" onclick="toggleCatchMap()">📋 Show List</button>
+            <button class="btn btn-secondary btn-sm" id="catch-view-toggle-btn" onclick="toggleCatchViewMode()">🖼️ Grid View</button>
+          </div>
         </div>
 
         <div class="month-recap" id="month-recap"></div>
@@ -3237,6 +3244,11 @@
             </div>
           </div>
           <div class="hint">Tip: use quick chips on the dashboard to instantly filter common catches.</div>
+        </div>
+
+        <div id="catch-map-wrap" style="margin-bottom:14px">
+          <div id="catch-map" style="position:relative;isolation:isolate;z-index:0;width:100%;height:420px;border-radius:20px;border:3px solid var(--navy);overflow:hidden"></div>
+          <div id="catch-map-note" style="display:none;font-size:12px;color:var(--muted);margin-top:6px"></div>
         </div>
 
         <div id="catch-list" class="section-grid"></div>
@@ -4082,6 +4094,9 @@
     }
 
     let spotMapVisible = true;
+    let catchMapVisible = true;
+    let catchMapInstance = null;
+    let lastFilteredCatches = null;
     let spotMapInstance = null;
     let currentWeather = null; // cached for use when logging a catch
     let lbScale = 1, lbX = 0, lbY = 0;
@@ -6355,7 +6370,7 @@
         ? `openLightbox('${c.photo.replace(/'/g, "\\'")}', '${(c.species || '').replace(/'/g, "\\'")}')`
         : `openCatchModal('${c.id}')`;
       return `
-        <div class="catch-photo-tile" onclick="${clickAction}">
+        <div class="catch-photo-tile" id="catch-card-${c.id}" onclick="${clickAction}">
           ${c.photo ? `<img src="${c.photo}" alt="${c.species}">` : `<span>${emojiForSpecies(c.species)}</span>`}
           <div class="catch-photo-tile-label">${label}</div>
         </div>
@@ -6393,7 +6408,7 @@
 
       if(c.skunk){
         return `
-          <article class="catch-card">
+          <article class="catch-card" id="catch-card-${c.id}">
             <div class="catch-thumb"><span>🚫</span></div>
             <div class="catch-main">
               <h3>Skunked — no fish</h3>
@@ -6426,7 +6441,7 @@
       }
 
       return `
-        <article class="catch-card">
+        <article class="catch-card" id="catch-card-${c.id}">
           ${badgeHtml}
           <div class="catch-thumb"${c.photo ? ` onclick="openLightbox('${c.photo.replace(/'/g, "\\'")}', '${(c.species||'').replace(/'/g, "\\'")}')" style="cursor:pointer"` : ''}>
             ${c.photo ? `<img src="${c.photo}" alt="${c.species}">` : `<span>${emojiForSpecies(c.species)}</span>`}
@@ -6484,6 +6499,7 @@
         const okSpecies = !speciesFilter || c.species === speciesFilter;
         return okQuery && okAngler && okSpecies;
       });
+      lastFilteredCatches = filtered;
 
       const el = document.getElementById('catch-list');
       if(!filtered.length){
@@ -6526,6 +6542,8 @@
           </div>
         `;
       }).join('');
+      // Keep the catches map in step with the list (search / filters)
+      if(catchMapVisible) renderCatchMap();
     }
 
     let catchLocationMapInstance = null;
@@ -6792,6 +6810,112 @@
         if(spotHeatOn) toggleSpotHeat();
         btn.textContent = '🗺️ Show Map';
       }
+    }
+
+    // Catches map: one pin per hole, coloured by species, count inside
+    function colorForSpecies(s){
+      const t = (s || '').toLowerCase();
+      if(t.includes('bass')) return '#2E7D4F';
+      if(t.includes('trout')) return '#4A90D9';
+      if(t.includes('pike') || t.includes('muskie')) return '#8A6D3B';
+      if(t.includes('walleye')) return '#D98E1B';
+      if(t.includes('catfish')) return '#6B5B95';
+      if(t.includes('carp')) return '#B7791F';
+      if(t.includes('perch') || t.includes('crappie') || t.includes('bluegill')) return '#E4572E';
+      if(t.includes('salmon')) return '#E2725B';
+      if(t.includes('sturgeon')) return '#5A6B5E';
+      if(t.includes('chub') || t.includes('fallfish')) return '#7A7A2E';
+      return '#1E4634';
+    }
+
+    function toggleCatchMap(){
+      catchMapVisible = !catchMapVisible;
+      const wrap = document.getElementById('catch-map-wrap');
+      const btn = document.getElementById('catch-map-toggle-btn');
+      if(catchMapVisible){
+        wrap.style.display = 'block';
+        btn.textContent = '📋 Show List';
+        renderCatchMap();
+      } else {
+        wrap.style.display = 'none';
+        btn.textContent = '🗺️ Show Map';
+      }
+    }
+
+    function renderCatchMap(){
+      // Only build the map while the Catches tab is actually on screen —
+      // Leaflet created in a hidden tab renders at zero size.
+      if(!document.getElementById('tab-catches').classList.contains('active')) return;
+      const list = lastFilteredCatches || catches;
+      const withCoords = list.map(c => ({ c, coords: parseCoords(c.coords) })).filter(x => x.coords);
+
+      if(!catchMapInstance){
+        catchMapInstance = L.map('catch-map', { scrollWheelZoom:false });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution:'&copy; OpenStreetMap contributors',
+          maxZoom:19
+        }).addTo(catchMapInstance);
+        // First landing: centre on Montreal, where 99% of the fishing happens.
+        catchMapInstance.setView([45.55, -73.66], 11);
+      }
+
+      // Clear old markers
+      catchMapInstance.eachLayer(layer => {
+        if(layer instanceof L.Marker) catchMapInstance.removeLayer(layer);
+      });
+
+      // Group catches by location (4 decimals ≈ 11 m) so one pin per hole
+      const groups = {};
+      withCoords.forEach(({c, coords}) => {
+        const key = coords.lat.toFixed(4) + ',' + coords.lng.toFixed(4);
+        if(!groups[key]) groups[key] = { coords, list: [] };
+        groups[key].list.push(c);
+      });
+
+      Object.values(groups).forEach(g => {
+        g.list.sort((a, b) => new Date(b.date + 'T' + (b.time || '00:00')) - new Date(a.date + 'T' + (a.time || '00:00')));
+        const newest = g.list[0];
+        const color = colorForSpecies(newest.species);
+        const label = spotName(newest.spotId) || 'Unknown spot';
+        const icon = L.divIcon({
+          className: 'catch-map-pin',
+          html: `<div style="background:${color}">${g.list.length}</div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+        const rows = g.list.slice(0, 6).map(x => {
+          const d = x.date ? new Date(x.date + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+          return `<a class="catch-map-popup-row" href="javascript:void(0)" onclick="viewCatchFromMap('${x.id}')">${emojiForSpecies(x.species)} <b>${x.species || 'Unknown'}</b>${x.weight ? ` — ${x.weight} lb` : ''} <span style="color:#5A6B5E">· ${d}</span></a>`;
+        }).join('');
+        const more = g.list.length > 6 ? `<div style="font-size:12px;color:#5A6B5E;padding-top:4px">…and ${g.list.length - 6} more in the list below</div>` : '';
+        const marker = L.marker([g.coords.lat, g.coords.lng], { icon }).addTo(catchMapInstance);
+        marker.bindPopup(`<div style="min-width:190px;max-width:250px"><strong style="font-size:15px">${label}</strong> <span style="font-size:12px;color:#5A6B5E">· ${g.list.length} catch${g.list.length === 1 ? '' : 'es'}</span><div style="margin-top:4px">${rows}${more}</div></div>`);
+      });
+
+      // Catches with no saved location can't be pinned — say so honestly
+      const noCoords = list.length - withCoords.length;
+      const note = document.getElementById('catch-map-note');
+      if(noCoords > 0){
+        note.textContent = `${noCoords} catch${noCoords === 1 ? '' : 'es'} have no saved location — find them in the list below.`;
+        note.style.display = 'block';
+      } else {
+        note.style.display = 'none';
+      }
+
+      setTimeout(() => catchMapInstance.invalidateSize(), 50);
+    }
+
+    // From a map pin popup: switch to the list and jump to that catch's card
+    function viewCatchFromMap(catchId){
+      const c = catches.find(x => x.id === catchId);
+      if(!c) return;
+      if(catchMapVisible) toggleCatchMap();
+      const key = c.date ? c.date.slice(0, 7) : 'undated';
+      if(collapsedMonths.has(key)){ collapsedMonths.delete(key); renderCatches(); }
+      setTimeout(() => {
+        const el = document.getElementById('catch-card-' + catchId);
+        if(el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 150);
     }
 
     function renderSpotMap(){
@@ -7528,6 +7652,7 @@
       renderIntel();
       renderTicker();
       if(spotMapVisible) renderSpotMap();
+      if(catchMapVisible) renderCatchMap();
       if(lastSolunarLat !== null) renderForecastStrip(lastSolunarLat, lastSolunarLng);
     }
 

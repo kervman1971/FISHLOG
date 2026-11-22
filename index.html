@@ -3292,13 +3292,13 @@
             <p>Map your holes, notes, and repeat performers.</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-sm" id="spot-heat-btn" onclick="toggleSpotHeat()" style="display:none">🔥 Heat</button>
-            <button class="btn btn-secondary btn-sm" id="map-toggle-btn" onclick="toggleSpotMap()">🗺️ Show Map</button>
+            <button class="btn btn-secondary btn-sm" id="spot-heat-btn" onclick="toggleSpotHeat()">🔥 Heat</button>
+            <button class="btn btn-secondary btn-sm" id="map-toggle-btn" onclick="toggleSpotMap()">📋 Show List</button>
             <button class="btn btn-primary btn-sm" onclick="openSpotModal()">+ Add Spot</button>
           </div>
         </div>
-        <div id="spot-map-wrap" style="display:none;margin-bottom:14px">
-          <div id="spot-map" style="position:relative;isolation:isolate;z-index:0;width:100%;height:360px;border-radius:20px;border:3px solid var(--navy);overflow:hidden"></div>
+        <div id="spot-map-wrap" style="margin-bottom:14px">
+          <div id="spot-map" style="position:relative;isolation:isolate;z-index:0;width:100%;height:420px;border-radius:20px;border:3px solid var(--navy);overflow:hidden"></div>
           <div id="spot-heat-chips" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px"></div>
           <div id="spot-heat-stats" style="display:none;font-size:12px;color:var(--muted);margin-top:6px"></div>
           <button class="btn btn-secondary btn-sm" onclick="openNauticalChartForMapView()" style="margin-top:8px;width:100%">🌊 Nautical Chart for This Area</button>
@@ -4076,7 +4076,7 @@
       startBtn.onclick = () => closeModals();
     }
 
-    let spotMapVisible = false;
+    let spotMapVisible = true;
     let spotMapInstance = null;
     let currentWeather = null; // cached for use when logging a catch
     let lbScale = 1, lbX = 0, lbY = 0;
@@ -6577,7 +6577,7 @@
         const coords = parseCoords(s.coords);
 
         return `
-          <article class="spot-card">
+          <article class="spot-card" id="spot-card-${s.id}">
             <div class="spot-top">
               <div class="spot-top-lead">
                 <div class="catch-thumb"${thumbPhoto ? ` onclick="openLightbox('${thumbPhoto.replace(/'/g, "\\'")}', '${s.name.replace(/'/g, "\\'")}')" style="cursor:pointer"` : ''}>
@@ -6671,6 +6671,15 @@
       }, 150);
     }
 
+    // From a map pin popup: switch to the list and jump to that spot's full card
+    function viewSpotFromMap(spotId){
+      if(spotMapVisible) toggleSpotMap();
+      setTimeout(() => {
+        const card = document.getElementById('spot-card-' + spotId);
+        if(card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+      }, 150);
+    }
+
     // Opens turn-by-turn directions to a spot in the device's default maps app
     function getDirectionsForSpot(spotId){
       const spot = spots.find(s => s.id === spotId);
@@ -6716,6 +6725,9 @@
     }
 
     function renderSpotMap(){
+      // Only build the map while the Spots tab is actually on screen —
+      // Leaflet created in a hidden tab renders at zero size.
+      if(!document.getElementById('tab-spots').classList.contains('active')) return;
       const pinned = spots.map(s => ({ spot:s, coords: parseCoords(s.coords) })).filter(x => x.coords);
 
       if(!spotMapInstance){
@@ -6724,6 +6736,9 @@
           attribution:'&copy; OpenStreetMap contributors',
           maxZoom:19
         }).addTo(spotMapInstance);
+        // First landing: centre on Montreal, where 99% of the fishing happens.
+        // Set once — later re-renders only refresh markers, never reset the view.
+        spotMapInstance.setView([45.55, -73.66], 11);
       }
 
       // Clear old markers
@@ -6734,26 +6749,21 @@
       // Re-apply the heat overlay if enabled, so it stays fresh after data changes
       if(spotHeatOn) renderSpotHeat();
 
-      if(!pinned.length){
-        spotMapInstance.setView([39.5, -98.35], 4); // center of US as fallback
-        setTimeout(() => spotMapInstance.invalidateSize(), 50);
-        return;
-      }
-
-      const bounds = [];
       pinned.forEach(({spot, coords}) => {
-        const count = catches.filter(c => c.spotId === spot.id).length;
-        const marker = L.marker([coords.lat, coords.lng]).addTo(spotMapInstance);
+        const spotCatches = catches.filter(c => c.spotId === spot.id);
+        const count = spotCatches.length;
+        const withWeight = spotCatches.filter(c => parseFloat(c.weight) > 0);
+        const bestCatch = withWeight.length
+          ? withWeight.reduce((best, c) => parseFloat(c.weight) > parseFloat(best.weight) ? c : best)
+          : null;
+        const lastCatch = spotCatches[0] || null;
+        const lastFishedText = lastCatch ? `Last fished ${timeAgoShort(lastCatch.date, lastCatch.time)}` : 'Not fished yet';
+        const speciesList = [...new Set(spotCatches.map(c => clean(c.species)).filter(Boolean))];
         const chartUrl = `https://fishing-app.gpsnauticalcharts.com/i-boating-fishing-web-app/fishing-marine-charts-navigation.html#13/${coords.lat}/${coords.lng}`;
-        marker.bindPopup(`<strong>${spot.name}</strong><br/>${spot.type || ''}${spot.type && count ? ' · ' : ''}${count ? count + ' catch' + (count===1?'':'es') : ''}<br/><a href="${chartUrl}" target="_blank" rel="noopener" style="color:#B23A17;font-weight:700;font-size:12px">🌊 Nautical Chart</a>`);
-        bounds.push([coords.lat, coords.lng]);
+        const marker = L.marker([coords.lat, coords.lng]).addTo(spotMapInstance);
+        marker.bindPopup(`<div style="min-width:180px;max-width:240px"><strong style="font-size:15px">${spot.name}</strong><br/><span style="font-size:12px;color:#5A6B5E">${spot.type || ''}${spot.type && count ? ' · ' : ''}${count ? count + ' catch' + (count===1?'':'es') : 'No catches yet'}</span>${bestCatch ? `<br/><span style="font-size:12px">🏆 Best: ${bestCatch.species}${bestCatch.weight ? ` — ${bestCatch.weight} lb` : ''}</span>` : ''}<br/><span style="font-size:12px">${lastFishedText}</span>${speciesList.length ? `<br/><span style="font-size:15px">${speciesList.map(sp => emojiForSpecies(sp)).join(' ')}</span>` : ''}<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap"><a href="javascript:void(0)" onclick="getDirectionsForSpot('${spot.id}')" style="color:#B23A17;font-weight:700;font-size:12px">🧭 Directions</a><a href="${chartUrl}" target="_blank" rel="noopener" style="color:#B23A17;font-weight:700;font-size:12px">🌊 Nautical Chart</a><a href="javascript:void(0)" onclick="viewSpotFromMap('${spot.id}')" style="color:#B23A17;font-weight:700;font-size:12px">📋 View spot</a></div></div>`);
       });
 
-      if(bounds.length === 1){
-        spotMapInstance.setView(bounds[0], 13);
-      } else {
-        spotMapInstance.fitBounds(bounds, { padding:[30,30] });
-      }
       setTimeout(() => spotMapInstance.invalidateSize(), 50);
     }
 

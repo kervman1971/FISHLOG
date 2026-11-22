@@ -1541,6 +1541,9 @@
     .species-sheet-search::placeholder{ color:rgba(248,241,220,.55); }
 
     .nominatim-suggest{ margin-top:10px; font-size:13px; font-weight:700; color:var(--ink); background:rgba(242,223,169,.55); border:1px solid var(--panel-border); border-radius:8px; padding:9px 11px; line-height:1.5; }
+    .nearby-spot-note{ margin-top:10px; font-size:13px; font-weight:700; color:var(--ink); background:rgba(30,70,52,.10); border:1.5px solid #1E4634; border-radius:10px; padding:10px 12px; line-height:1.5; }
+    .nearby-spot-note.warn{ background:rgba(242,169,59,.16); border-color:#C98A1B; }
+    .nearby-spot-note button{ margin-left:6px; font-weight:800; color:#B23A17; background:none; border:none; padding:0; cursor:pointer; font-size:13px; text-decoration:underline; }
 
     .inat-results{ margin-top:10px; }
     .inat-title{ font-size:12px; font-weight:900; letter-spacing:.6px; text-transform:uppercase; color:var(--ink); margin-bottom:8px; }
@@ -3616,11 +3619,12 @@
             <div class="field-label">Spot</div>
             <select class="select" id="f-spot"></select>
             <div class="form-note">Pick an existing spot or leave it blank. Spot stats will auto-update.</div>
+            <div id="catch-spot-match" class="nearby-spot-note" style="display:none"></div>
           </div>
           <div class="field-group full">
             <div class="field-label">GPS Coordinates</div>
             <div class="gps-row">
-              <input class="text" type="text" id="f-coords" placeholder="45.5017, -73.5673" />
+              <input class="text" type="text" id="f-coords" placeholder="45.5017, -73.5673" onchange="checkCatchSpot()" />
               <button class="btn btn-secondary btn-sm" onclick="getGPS('f-coords')">Use My Location</button>
             </div>
           </div>
@@ -3756,10 +3760,11 @@
           <div class="field-group full">
             <div class="field-label">GPS Coordinates</div>
             <div class="gps-row">
-              <input class="text" type="text" id="s-coords" placeholder="45.5017, -73.5673" />
+              <input class="text" type="text" id="s-coords" placeholder="45.5017, -73.5673" onchange="checkNewSpotDup()" />
               <button class="btn btn-secondary btn-sm" onclick="getGPS('s-coords')">Use My Location</button>
             </div>
           </div>
+          <div id="spot-dup-warning" class="nearby-spot-note warn" style="display:none"></div>
           <div class="field-group full">
             <button class="btn btn-tertiary btn-sm" id="suggest-name-btn" onclick="suggestSpotName()">✨ Suggest a name from the map</button>
             <div id="spot-name-suggestion" class="nominatim-suggest" style="display:none"></div>
@@ -4874,6 +4879,7 @@
       const _sizeNote = document.getElementById('f-photo-size-note');
       if(_sizeNote){ _sizeNote.style.display = 'none'; _sizeNote.textContent = ''; }
       populateSpotSelect();
+      document.getElementById('catch-spot-match').style.display = 'none';
       const now = new Date();
       const pad = n => String(n).padStart(2,'0');
       const dateStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
@@ -4986,6 +4992,7 @@
         document.getElementById('s-access').value = '';
         document.getElementById('s-notes').value = '';
       }
+      document.getElementById('spot-dup-warning').style.display = 'none';
       document.getElementById('spot-modal').classList.add('open');
     }
 
@@ -5068,6 +5075,8 @@
         const lat = pos.coords.latitude.toFixed(5);
         const lng = pos.coords.longitude.toFixed(5);
         document.getElementById(fieldId).value = `${lat}, ${lng}`;
+        if(fieldId === 'f-coords') checkCatchSpot();
+        else if(fieldId === 's-coords') checkNewSpotDup();
         showToast('📍 Location captured!', 'success');
       }, () => showToast('Could not get your location.', 'error'));
     }
@@ -5971,6 +5980,7 @@
           document.getElementById('f-weather').value = label;
           if(!document.getElementById('f-coords').value){
             document.getElementById('f-coords').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            checkCatchSpot();
           }
           showToast(`🌤️ ${label}, ${temp}°C`, 'success');
         } catch(err){
@@ -6704,6 +6714,58 @@
       const parts = str.split(',').map(s => parseFloat(s.trim()));
       if(parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
       return { lat: parts[0], lng: parts[1] };
+    }
+
+    // Distance in metres between two {lat,lng} points (haversine)
+    function haversineM(a, b){
+      const R = 6371000, toRad = d => d * Math.PI / 180;
+      const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+      const h = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng/2) * Math.sin(dLng/2);
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+    const NEARBY_SPOT_M = 100; // "already logged here" radius
+    function nearestSpotTo(coords, excludeId){
+      let best = null;
+      spots.forEach(s => {
+        if(excludeId && s.id === excludeId) return;
+        const c = parseCoords(s.coords);
+        if(!c) return;
+        const d = haversineM(coords, c);
+        if(d <= NEARBY_SPOT_M && (!best || d < best.dist)) best = { spot:s, dist: Math.round(d) };
+      });
+      return best;
+    }
+
+    // Log Catch: if these coords are already a logged spot, select it
+    function checkCatchSpot(){
+      const box = document.getElementById('catch-spot-match');
+      const coords = parseCoords(document.getElementById('f-coords').value);
+      if(!coords){ box.style.display = 'none'; return; }
+      const match = nearestSpotTo(coords);
+      if(!match){ box.style.display = 'none'; return; }
+      document.getElementById('f-spot').value = match.spot.id;
+      box.innerHTML = `📍 You're at <b>${escHtml(match.spot.name)}</b> — about ${match.dist} m away. Spot selected.<button type="button" onclick="dismissCatchSpotMatch()">Not this one</button>`;
+      box.style.display = 'block';
+    }
+    function dismissCatchSpotMatch(){
+      document.getElementById('f-spot').value = '';
+      document.getElementById('catch-spot-match').style.display = 'none';
+    }
+
+    // Add/Edit Spot: warn if a different spot is already logged right here
+    function checkNewSpotDup(){
+      const box = document.getElementById('spot-dup-warning');
+      const coords = parseCoords(document.getElementById('s-coords').value);
+      if(!coords){ box.style.display = 'none'; return; }
+      const match = nearestSpotTo(coords, editingSpotId || null);
+      if(!match){ box.style.display = 'none'; return; }
+      box.innerHTML = `⚠️ <b>${escHtml(match.spot.name)}</b> is already logged about ${match.dist} m from here. You can still save this one — or <button type="button" onclick="viewDupSpotOnMap('${match.spot.id}')">view it on the map</button>`;
+      box.style.display = 'block';
+    }
+    function viewDupSpotOnMap(spotId){
+      closeModals();
+      showTab('spots', document.querySelectorAll('.tab')[2]);
+      setTimeout(() => focusSpotOnMap(spotId), 300);
     }
 
     function toggleSpotMap(){

@@ -4879,6 +4879,7 @@
       const _sizeNote = document.getElementById('f-photo-size-note');
       if(_sizeNote){ _sizeNote.style.display = 'none'; _sizeNote.textContent = ''; }
       populateSpotSelect();
+      catchSpotAutoId = null;
       document.getElementById('catch-spot-match').style.display = 'none';
       const now = new Date();
       const pad = n => String(n).padStart(2,'0');
@@ -6736,19 +6737,26 @@
       return best;
     }
 
-    // Log Catch: if these coords are already a logged spot, select it
+    // Log Catch: if these coords are already a logged spot, select it.
+    // catchSpotAutoId remembers a selection the check made, so moving the
+    // coords away clears it again — a hand-picked spot is never touched.
+    let catchSpotAutoId = null;
     function checkCatchSpot(){
       const box = document.getElementById('catch-spot-match');
       const coords = parseCoords(document.getElementById('f-coords').value);
-      if(!coords){ box.style.display = 'none'; return; }
+      const sel = document.getElementById('f-spot');
+      const clearAuto = () => { if(catchSpotAutoId && sel.value === catchSpotAutoId) sel.value = ''; catchSpotAutoId = null; };
+      if(!coords){ box.style.display = 'none'; clearAuto(); return; }
       const match = nearestSpotTo(coords);
-      if(!match){ box.style.display = 'none'; return; }
-      document.getElementById('f-spot').value = match.spot.id;
+      if(!match){ box.style.display = 'none'; clearAuto(); return; }
+      sel.value = match.spot.id;
+      catchSpotAutoId = match.spot.id;
       box.innerHTML = `📍 You're at <b>${escHtml(match.spot.name)}</b> — about ${match.dist} m away. Spot selected.<button type="button" onclick="dismissCatchSpotMatch()">Not this one</button>`;
       box.style.display = 'block';
     }
     function dismissCatchSpotMatch(){
       document.getElementById('f-spot').value = '';
+      catchSpotAutoId = null;
       document.getElementById('catch-spot-match').style.display = 'none';
     }
 

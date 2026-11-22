@@ -639,6 +639,28 @@
       background:rgba(255,255,255,.10);
     }
 
+    /* Modal fields: panels are deep pine, so fields must be cream —
+       the shared .field rule is dark ink on a near-transparent field,
+       unreadable inside a modal. Applies to every modal (Log a Catch,
+       Add Spot, Skunk, Trip, Who am I). */
+    .modal .field, .modal .select, .modal .text, .modal textarea{
+      background:#F8F1DC;
+      color:#22392C;
+      border-color:rgba(248,241,220,.45);
+      color-scheme:light;
+    }
+    .modal .field::placeholder, .modal .text::placeholder, .modal textarea::placeholder{ color:rgba(34,57,44,.55); }
+    .modal .field:focus, .modal .select:focus, .modal .text:focus, .modal textarea:focus{
+      background:#FFFDF4;
+      border-color:#F2A93B;
+      box-shadow:0 0 0 3px rgba(242,169,59,.35);
+    }
+    .modal .field-label{ color:rgba(248,241,220,.78); }
+    .modal .form-note{ color:rgba(248,241,220,.65); }
+    .modal .nearby-spot-note{ background:rgba(242,223,169,.9); }
+    .modal .nearby-spot-note.warn{ background:rgba(242,169,59,.45); border-color:#F2A93B; }
+    .modal .nominatim-suggest{ background:rgba(242,223,169,.9); }
+
     .search-filters{
       display:grid;
       grid-template-columns:1.2fr .8fr;

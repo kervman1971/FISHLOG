@@ -3619,6 +3619,9 @@
               <optgroup label="Catfish">
                 <option>Channel Catfish</option>
               </optgroup>
+              <optgroup label="Sturgeon">
+                <option>Lake Sturgeon</option>
+              </optgroup>
               <optgroup label="Carp &amp; Tench">
                 <option>Common Carp</option>
                 <option>Tench</option>
@@ -3631,6 +3634,7 @@
                 <option>Goldeye</option>
                 <option>Longnose Gar</option>
                 <option>Mooneye</option>
+                <option>Silver Chub</option>
               </optgroup>
               <option value="Other">Other</option>
             </select>
@@ -4564,6 +4568,15 @@
 
     function selectSpecies(name){
       const sel = document.getElementById('f-species');
+      // Self-healing: if a catalog species has no <option> yet (the
+      // picker and this select are separate lists), add it — setting
+      // .value to a missing option silently fails and the pick is lost.
+      if(![...sel.options].some(o => o.value === name || o.text === name)){
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      }
       sel.value = name;
       syncSpeciesTrigger();
       closeSpeciesSheet();
